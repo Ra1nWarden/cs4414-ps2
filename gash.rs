@@ -18,12 +18,14 @@ use extra::getopts;
 
 struct Shell {
     cmd_prompt: ~str,
+    cmd_history: ~[~str]
 }
 
 impl Shell {
     fn new(prompt_str: &str) -> Shell {
         Shell {
             cmd_prompt: prompt_str.to_owned(),
+	    cmd_history: ~[]
         }
     }
     
@@ -36,6 +38,7 @@ impl Shell {
             
             let line = stdin.read_line().unwrap();
             let cmd_line = line.trim().to_owned();
+	    self.cmd_history.push(cmd_line.clone());
             let program = cmd_line.splitn(' ', 1).nth(0).expect("no program");
             
             match program {
@@ -58,8 +61,28 @@ impl Shell {
     
     fn run_cmd(&mut self, program: &str, argv: &[~str]) {
         if self.cmd_exists(program) {
-            run::process_status(program, argv);
-        } else {
+	    if program == "cd" {
+	       if argv.len() != 1 {
+	       	  println!("Usage: cd <directory>!");
+	       }
+	       else {
+	       	  let tar_path = Path::new(argv[0].clone());
+		  match os::change_dir(&tar_path) {
+		  	true => { return; }
+			false => { println!("No such directory!"); }
+		  }
+	       }
+	    }
+	    else {
+              run::process_status(program, argv);
+            }
+        } 
+	else if program == "history" {
+	     for i in range(0, self.cmd_history.len()) {
+	     	 println!("{:u} {:s}", i+1, self.cmd_history[i]);
+	     }
+	}
+	else {
             println!("{:s}: command not found", program);
         }
     }
