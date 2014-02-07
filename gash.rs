@@ -94,7 +94,7 @@ impl Shell {
 		 }
 	      }
 	      else {
-	      	 println!("{:s}: command not found", program);
+	      	 println!("{:s}: command not found", prog);
 	      }
 	   }
 	   else {
@@ -106,8 +106,12 @@ impl Shell {
     fn run_cmd(&mut self, program: &str, argv: &[~str]) {
         if self.cmd_exists(program) {
 	    if program == "cd" {
-	       if argv.len() != 1 {
+	       if argv.len() > 1 {
 	       	  println!("Usage: cd <directory>!");
+	       }
+	       else if argv.len() == 0 {
+	       	  let tar_path = std::os::homedir().unwrap();
+		  os::change_dir(&tar_path);
 	       }
 	       else {
 	       	  let tar_path = Path::new(argv[0].clone());
