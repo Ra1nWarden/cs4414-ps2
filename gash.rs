@@ -14,6 +14,7 @@ extern mod extra;
 use std::{io, run, os};
 use std::io::buffered::BufferedReader;
 use std::io::stdin;
+use std::libc;
 use extra::getopts;
 
 struct Shell {
@@ -85,12 +86,77 @@ impl Shell {
 	      	   } 
 	      }  
 	   }
+
+	   // Handle IO redirection
+	   let mut input: libc::c_int = libc::STDIN_FILENO;
+	   let mut output: libc::c_int = libc::STDOUT_FILENO;
+	   let argv_length = argv.len();
+	   for i in range(0, argv_length) {
+	       if i >= argv.len() {
+	       	  break;
+	       }
+	       if argv[i] == ~"<" {
+	       	  argv.remove(i);
+	       	  if i >= argv.len() {
+		     println!("No file specified for input.")
+		     return;
+		  }
+		  else {
+		       unsafe{
+			let in_file_name = argv.remove(i);
+		       	let mode = "r".to_c_str().unwrap();
+			let file_path = Path::new(in_file_name.clone());
+			if file_path.exists() {	
+			   let name_in_str = in_file_name.clone().to_c_str().unwrap();
+			   let in_file = libc::fopen(name_in_str, mode);
+		       	   input = libc::fileno(in_file);
+			}
+			else {
+			   println!("Input file does not exists!");
+			   return;
+			}
+		       }
+		  }
+	       }
+	       if i >= argv.len() {
+	       	  break;
+	       }
+	       if argv[i] == ~">" {
+	       	  argv.remove(i);
+		  if i >= argv.len() {
+		     println!("No file specified for output.")
+		     return;
+		  }
+		  else {
+		       unsafe {
+		       	 let out_file_name = argv.remove(i).to_c_str().unwrap();
+		       	 let mode = "w".to_c_str().unwrap();
+		       	 let out_file = libc::fopen(out_file_name, mode);
+		       	 output = libc::fileno(out_file);
+		       }
+		     if output == -1 {
+		     	println!("Invalid file for output.");
+			return;
+		     }
+		  }
+	       }
+	   }
+	   
 	   if background {
 	      let prog = mod_prog.clone();
 	      let arguments = argv.clone();
+	      let in_chan = input.clone();
+	      let out_chan = output.clone();
+	      let err_chan = libc::STDERR_FILENO;
 	      if self.cmd_exists(prog) {
 	      	 do spawn {
-		    run::process_status(prog, arguments);
+		    run::Process::new(prog, arguments, run::ProcessOptions {
+		    		  			  	     env: None,
+								     dir: None,
+								     in_fd: Some(in_chan),
+								     out_fd: Some(out_chan),
+								     err_fd: Some(err_chan)
+		    		  			  	     });
 		 }
 	      }
 	      else {
@@ -98,12 +164,12 @@ impl Shell {
 	      }
 	   }
 	   else {
-	   	self.run_cmd(program, argv);
+	   	self.run_cmd(program, argv, input, output);
 	   }
         }
     }
     
-    fn run_cmd(&mut self, program: &str, argv: &[~str]) {
+    fn run_cmd(&mut self, program: &str, argv: &[~str], input_chan: libc::c_int, output_chan: libc::c_int) {
         if self.cmd_exists(program) {
 	    if program == "cd" {
 	       if argv.len() > 1 {
@@ -122,7 +188,13 @@ impl Shell {
 	       }
 	    }
 	    else {
-            	 run::process_status(program, argv);
+            	  run::Process::new(program, argv, run::ProcessOptions {
+		    		  			  	     env: None,
+								     dir: None,
+								     in_fd: Some(input_chan),
+								     out_fd: Some(output_chan),
+								     err_fd: Some(libc::STDERR_FILENO)
+		    		  			  	     });
             }
         } 
 	else if program == "history" {
