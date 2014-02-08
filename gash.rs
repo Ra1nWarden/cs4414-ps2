@@ -51,18 +51,47 @@ impl Shell {
             match mod_prog {
                 ""      =>  { continue; }
                 "exit"  =>  { return; }
-                _       =>  { self.run_cmdline(cmd_line); }
+                _       =>  { self.run_pipes(cmd_line); }
             }
         }
     }
     
-    fn run_cmdline(&mut self, cmd_line: &str) {	 
+    fn run_pipes(&mut self, cmd_line: &str) {
+       let progs: ~[~str] = 
+       	       	      cmd_line.split('|').filter_map(|x| if x != "" { Some(x.to_owned()) } else { None }).to_owned_vec();
+       let mut channels: ~[std::os::Pipe] = ~[];
+       for _ in range(0, progs.len()) {
+       	   channels.push(std::os::pipe());
+       }
+       for i in range(0, progs.len()) {
+       	   let mut in_chan = libc::STDIN_FILENO;
+	   let mut out_chan = libc::STDOUT_FILENO;
+	   if i == 0 {
+	      out_chan = channels[i].out;
+	   }
+       	   if i > 0 {
+	      in_chan = channels[i-1].input;
+	      out_chan = channels[i].out;
+	   }
+	   if i == progs.len() - 1 {
+	      out_chan = libc::STDOUT_FILENO;
+	   }
+	   if i == progs.len() - 1 {
+	      self.run_cmdline(progs[i].trim().clone(), in_chan, out_chan, false);
+	   }
+	   else {
+	      self.run_cmdline(progs[i].trim().clone(), in_chan, out_chan, false);
+	   }
+       }
+    }
+    
+    fn run_cmdline(&mut self, cmd_line: &str, in_chan: libc::c_int, out_chan: libc::c_int, bg: bool) {	 
         let mut argv: ~[~str] =
             cmd_line.split(' ').filter_map(|x| if x != "" { Some(x.to_owned()) } else { None }).to_owned_vec();
         if argv.len() > 0 {
 	   let program: ~str = argv.remove(0);
 	   let mut mod_prog = program.clone();
-	   let mut background = false;
+	   let mut background = bg;
 	   if argv.len() == 0 {
 	      let prog_length = mod_prog.len();    
 	      if mod_prog.slice_from(prog_length - 1) == "&" {
@@ -88,8 +117,8 @@ impl Shell {
 	   }
 
 	   // Handle IO redirection
-	   let mut input: libc::c_int = libc::STDIN_FILENO;
-	   let mut output: libc::c_int = libc::STDOUT_FILENO;
+	   let mut input: libc::c_int = in_chan;
+	   let mut output: libc::c_int = out_chan;
 	   let argv_length = argv.len();
 	   for i in range(0, argv_length) {
 	       if i >= argv.len() {
@@ -145,18 +174,25 @@ impl Shell {
 	   if background {
 	      let prog = mod_prog.clone();
 	      let arguments = argv.clone();
-	      let in_chan = input.clone();
-	      let out_chan = output.clone();
+	      let fin_chan = input.clone();
+	      let fout_chan = output.clone();
 	      let err_chan = libc::STDERR_FILENO;
 	      if self.cmd_exists(prog) {
 	      	 do spawn {
-		    run::Process::new(prog, arguments, run::ProcessOptions {
+		    let proc_run = run::Process::new(prog, arguments, run::ProcessOptions {
 		    		  			  	     env: None,
 								     dir: None,
-								     in_fd: Some(in_chan),
-								     out_fd: Some(out_chan),
+								     in_fd: Some(fin_chan),
+								     out_fd: Some(fout_chan),
 								     err_fd: Some(err_chan)
 		    		  			  	     });
+		    proc_run.unwrap().finish();
+		    if fin_chan != 0 {
+		       std::os::close(fin_chan);
+		    }
+		    if fout_chan != 1 {
+		       std::os::close(fout_chan);
+		    }
 		 }
 	      }
 	      else {
@@ -188,13 +224,20 @@ impl Shell {
 	       }
 	    }
 	    else {
-            	  run::Process::new(program, argv, run::ProcessOptions {
+            	  let proc_run = run::Process::new(program, argv, run::ProcessOptions {
 		    		  			  	     env: None,
 								     dir: None,
 								     in_fd: Some(input_chan),
 								     out_fd: Some(output_chan),
 								     err_fd: Some(libc::STDERR_FILENO)
 		    		  			  	     });
+		  proc_run.unwrap().finish();
+		  if input_chan != 0 {
+		     std::os::close(input_chan);
+		  }
+		  if output_chan != 1 {
+		     std::os::close(output_chan);
+		  }
             }
         } 
 	else if program == "history" {
@@ -241,7 +284,7 @@ fn main() {
     let opt_cmd_line = get_cmdline_from_args();
     
     match opt_cmd_line {
-        Some(cmd_line) => Shell::new("").run_cmdline(cmd_line),
+        Some(cmd_line) => Shell::new("").run_cmdline(cmd_line, libc::STDIN_FILENO, libc::STDOUT_FILENO, false),
         None           => Shell::new("gash > ").run()
     }
 }
