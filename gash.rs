@@ -88,6 +88,7 @@ impl Shell {
         if argv.len() > 0 {
 	   let program: ~str = argv.remove(0);
 	   let mut mod_prog = program.clone();
+	   /*
 	   if mod_prog == ~"grep" {
 	      if argv.len() > 0 {
 	      	 let mut matching = argv.pop();
@@ -98,6 +99,7 @@ impl Shell {
 		 argv.push(matching);
 	      }
 	   }
+	   */
 	   let mut background = false;
 	   if argv.len() == 0 {
 	      let prog_length = mod_prog.len();    
