@@ -87,6 +87,16 @@ impl Shell {
         if argv.len() > 0 {
 	   let program: ~str = argv.remove(0);
 	   let mut mod_prog = program.clone();
+	   if mod_prog == ~"grep" {
+	      if argv.len() == 1 {
+	      	 let mut matching = argv.pop();
+		 if matching.slice_to(1) == "\"" && matching.slice_from(matching.len() - 1) == "\"" {
+		    matching = matching.slice_to(matching.len() - 1).to_owned();
+		    matching = matching.slice_from(1).to_owned();
+	      	 }
+		 argv.push(matching);
+	      }
+	   }
 	   let mut background = false;
 	   if argv.len() == 0 {
 	      let prog_length = mod_prog.len();    
