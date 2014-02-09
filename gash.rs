@@ -16,6 +16,7 @@ use std::io::buffered::BufferedReader;
 use std::io::stdin;
 use std::io::signal::{Listener, Interrupt};
 use std::libc;
+use std::num;
 use extra::getopts;
 
 struct Shell {
@@ -88,7 +89,7 @@ impl Shell {
 	   let program: ~str = argv.remove(0);
 	   let mut mod_prog = program.clone();
 	   if mod_prog == ~"grep" {
-	      if argv.len() == 1 {
+	      if argv.len() > 0 {
 	      	 let mut matching = argv.pop();
 		 if matching.slice_to(1) == "\"" && matching.slice_from(matching.len() - 1) == "\"" {
 		    matching = matching.slice_to(matching.len() - 1).to_owned();
@@ -255,6 +256,24 @@ impl Shell {
 	else if program == "history" {
 	     for i in range(0, self.cmd_history.len()) {
 	     	 println!(" {:u} {:s}", i+1, self.cmd_history[i]);
+	     }
+	     let mut stdin = BufferedReader::new(stdin());
+	     loop {
+	     	  println!("Enter the next command you want to run (-1 to quit): ");
+	     	  let input_no_str = stdin.read_line().unwrap_or(~"-1");
+		  let input_no = from_str::<int>(input_no_str.slice_to(input_no_str.len() - 1)).unwrap();
+		  if input_no == -1 {
+		     break;
+		  }
+		  else if input_no < num::from_uint(self.cmd_history.len()).unwrap() {
+		     let retrieved_cmd = self.cmd_history[input_no - 1].clone();
+		     self.cmd_history.push(retrieved_cmd.clone());
+		     self.run_pipes(retrieved_cmd);
+		     break;
+		  }
+		  else {
+		      println!("Invalid index for command!");
+		  }
 	     }
 	}
 	else {
