@@ -259,7 +259,7 @@ impl Shell {
 	     }
 	     let mut stdin = BufferedReader::new(stdin());
 	     loop {
-	     	  println!("Enter the next command you want to run (-1 to quit): ");
+	     	  println!("Enter the next command you want to rerun (-1 to quit): ");
 	     	  let input_no_str = stdin.read_line().unwrap_or(~"-1");
 		  let input_no = from_str::<int>(input_no_str.slice_to(input_no_str.len() - 1)).unwrap();
 		  if input_no == -1 {
